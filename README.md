@@ -20,8 +20,8 @@ No Python packages are required; the client uses the standard library.
 
 ```bash
 export OPENROUTER_API_KEY="your-key"
-# Optional. The default is openai/gpt-4.1-mini.
-export OPENROUTER_MODEL="openai/gpt-4.1-mini"
+# Optional. The default is the simple open-weight model below.
+export OPENROUTER_MODEL="openai/gpt-oss-20b:free"
 ```
 
 ## Demo 1 — the model has no hands

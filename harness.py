@@ -11,7 +11,7 @@ from collections.abc import Callable
 from typing import Any
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-DEFAULT_MODEL = "openai/gpt-4.1-mini"
+DEFAULT_MODEL = "openai/gpt-oss-20b:free"
 
 Transport = Callable[[str, dict[str, str], dict[str, Any]], dict[str, Any]]
 
