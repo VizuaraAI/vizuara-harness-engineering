@@ -9,7 +9,12 @@ This first checkpoint isolates the two ideas we want to teach:
 1. **A bare LLM call** can produce text but cannot touch the external world.
 2. **An agent loop** lets the model request an action, lets our code perform it, feeds the observation back, and asks the model what to do next.
 
-The repository will later grow tools, context management, durability, and subagents. They are intentionally absent today.
+The repository now contains two incremental modules:
+
+1. the bare LLM call and smallest loop;
+2. a seven-tool coding toolbox with an observable message array.
+
+Context management, durability, permissions, sandboxing, and subagents remain intentionally absent.
 
 ## Requirements
 
@@ -72,3 +77,94 @@ python3 -m unittest discover -s tests -v
 ```
 
 The tests use a fake model transport, so they do not spend API credits.
+
+---
+
+## Module 2 — tools as contracts
+
+`tools.py` implements the seven native coding tools used by Pi-style harnesses:
+
+| Tool | Model-facing job | Runtime action |
+|---|---|---|
+| `read` | Read a text file, with paging | Reads UTF-8 text and returns numbered lines |
+| `write` | Create or completely overwrite a file | Creates parents and writes text |
+| `edit` | Replace one exact, unique string | Validates uniqueness, then changes the file |
+| `bash` | Execute a shell command | Runs a subprocess in the workspace |
+| `grep` | Search inside files | Applies a regex or literal search |
+| `find` | Search for files by glob | Recursively matches file paths |
+| `ls` | List one directory | Returns immediate entries alphabetically |
+
+Each tool is one `Tool` object with two halves:
+
+```python
+Tool(
+    name="read",              # model reads this
+    label="Read",             # human UI reads this
+    description="...",        # model reads this
+    parameters={...},          # model reads this JSON Schema
+    execute=_read,             # only our harness runs this
+)
+```
+
+`openrouter_tools()` serializes only `name`, `description`, and `parameters`.
+The model never receives the Python `execute` function. After a model emits a
+tool call, `execute_tool()` dispatches its name and arguments to that hidden
+function.
+
+### Run every tool locally without API credits
+
+```bash
+python3 -m unittest discover -s tests -p 'test_tools.py' -v
+```
+
+These tests create temporary directories and exercise real filesystem and shell
+behavior. They do not call OpenRouter and do not modify your repository files.
+
+### Run the message-state teaching test
+
+```bash
+python3 -m unittest discover -s tests -p 'test_teaching_loop.py' -v
+```
+
+### Run the complete test suite
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+### Run the live 10+ turn tutorial
+
+First configure OpenRouter:
+
+```bash
+export OPENROUTER_API_KEY="your-key"
+export OPENROUTER_MODEL="openai/gpt-oss-20b:free"
+```
+
+Then run:
+
+```bash
+python3 03_tools_and_state.py
+```
+
+The model is instructed to perform one call per turn: `ls`, `write`, `read`,
+`edit`, `grep`, `find`, `bash`, a deliberately failing `read`, recovery with
+`ls`, and a final successful `read`. The terminal displays, after each append:
+
+- the turn number;
+- which tool the model selected from the contracts;
+- the exact arguments it generated;
+- the tool result appended by the harness;
+- every message currently in the model's memory.
+
+The demo changes files only inside `tool_demo_workspace/`. Remove and rerun it
+for a clean classroom demonstration:
+
+```bash
+rm -rf tool_demo_workspace
+python3 03_tools_and_state.py
+```
+
+> **Safety warning:** `bash`, `write`, and `edit` currently run without a
+> permission gate or sandbox. That omission is deliberate for this teaching
+> module; permissions and sandboxing are the next layer.

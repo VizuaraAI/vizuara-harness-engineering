@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import json
 import os
-import pathlib
 import urllib.error
 import urllib.request
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
+
+from tools import execute_tool, openrouter_tools
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_MODEL = "openai/gpt-oss-20b:free"
@@ -65,30 +67,13 @@ class OpenRouterClient:
         return response["choices"][0]["message"]
 
 
-TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "read_file",
-            "description": "Read a UTF-8 text file and return its contents.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string", "description": "Path to the file"}
-                },
-                "required": ["path"],
-                "additionalProperties": False,
-            },
-        },
-    }
-]
+TOOLS = openrouter_tools()
 
 
 def run_tool(name: str, arguments: dict[str, Any]) -> str:
     """The harness—not the model—performs the requested real-world action."""
-    if name == "read_file":
-        return pathlib.Path(arguments["path"]).read_text(encoding="utf-8")
-    return f"Unknown tool: {name}"
+    legacy_name = "read" if name == "read_file" else name
+    return execute_tool(legacy_name, arguments)
 
 
 def text_of(message: dict[str, Any]) -> str:
@@ -98,7 +83,9 @@ def text_of(message: dict[str, Any]) -> str:
 def run_agent(
     user_request: str,
     client: OpenRouterClient | None = None,
-    max_turns: int = 8,
+    max_turns: int = 20,
+    cwd: str | Path = ".",
+    show_state: bool = False,
 ) -> str:
     """Call → append → act → observe → repeat, until the model answers."""
     model = client or OpenRouterClient()
@@ -108,7 +95,11 @@ def run_agent(
         reply = model.complete(messages, tools=TOOLS)
         messages.append(reply)
         tool_calls = reply.get("tool_calls") or []
-        print(f"TURN {turn}: {'tool call' if tool_calls else 'final answer'}")
+        print(f"\n{'=' * 72}\nTURN {turn}: {'tool call' if tool_calls else 'final answer'}\n{'=' * 72}")
+
+        if show_state:
+            print(f"STATE: {len(messages)} messages after appending assistant")
+            _print_messages(messages)
 
         if not tool_calls:
             return text_of(reply)
@@ -116,13 +107,29 @@ def run_agent(
         for call in tool_calls:
             function = call["function"]
             arguments = json.loads(function["arguments"])
-            output = run_tool(function["name"], arguments)
-            messages.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": call["id"],
-                    "content": output,
-                }
-            )
+            print(f"MODEL CHOSE: {function['name']}({json.dumps(arguments, ensure_ascii=False)})")
+            tool_name = "read" if function["name"] == "read_file" else function["name"]
+            output = execute_tool(tool_name, arguments, cwd=cwd)
+            result = {"role": "tool", "tool_call_id": call["id"], "content": output}
+            messages.append(result)
+            print(f"HARNESS APPENDED: tool result ({len(output)} chars)")
+
+        if show_state:
+            print(f"STATE: {len(messages)} messages after appending tool result(s)")
+            _print_messages(messages)
 
     raise RuntimeError(f"Agent exceeded max_turns={max_turns}.")
+
+
+def _print_messages(messages: list[dict[str, Any]]) -> None:
+    """Render the model's complete memory after each append for teaching."""
+    for index, message in enumerate(messages):
+        role = message["role"].upper()
+        if message.get("tool_calls"):
+            calls = [call["function"]["name"] for call in message["tool_calls"]]
+            summary = f"tool_calls={calls}"
+        else:
+            content = message.get("content") or ""
+            summary = content if len(content) <= 160 else content[:157] + "..."
+            summary = summary.replace("\n", "\\n")
+        print(f"  messages[{index}] {role:<9} {summary}")
