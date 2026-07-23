@@ -99,7 +99,10 @@ def run_agent(
     messages = (
         context_engine.start_messages(system_prompt, user_request)
         if context_engine
-        else [{"role": "user", "content": user_request}]
+        else [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_request},
+        ]
     )
 
     for turn in range(1, max_turns + 1):

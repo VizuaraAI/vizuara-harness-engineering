@@ -64,6 +64,19 @@ class HarnessTests(unittest.TestCase):
         self.assertEqual(run_agent("Say done", client=client), "Done.")
         self.assertEqual(len(client.calls), 1)
 
+    def test_agent_sends_system_prompt_without_context_engine(self):
+        client = FakeClient([{"role": "assistant", "content": "Done."}])
+
+        run_agent("Do work", client=client, system_prompt="USE REAL TOOLS")
+
+        self.assertEqual(
+            client.calls[0]["messages"][:2],
+            [
+                {"role": "system", "content": "USE REAL TOOLS"},
+                {"role": "user", "content": "Do work"},
+            ],
+        )
+
     def test_text_of_handles_empty_content(self):
         self.assertEqual(text_of({"content": None}), "")
 

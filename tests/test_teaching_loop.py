@@ -46,13 +46,14 @@ class TeachingLoopTests(unittest.TestCase):
                 answer = run_agent("read note", client=client, cwd=directory, show_state=True)
 
         self.assertEqual(answer, "done")
-        self.assertEqual([len(snapshot) for snapshot in client.snapshots], [1, 3])
+        self.assertEqual([len(snapshot) for snapshot in client.snapshots], [2, 4])
         transcript = output.getvalue()
         self.assertIn("TURN 1: tool call", transcript)
         self.assertIn("MODEL CHOSE: read", transcript)
-        self.assertIn("messages[0] USER", transcript)
-        self.assertIn("messages[1] ASSISTANT", transcript)
-        self.assertIn("messages[2] TOOL", transcript)
+        self.assertIn("messages[0] SYSTEM", transcript)
+        self.assertIn("messages[1] USER", transcript)
+        self.assertIn("messages[2] ASSISTANT", transcript)
+        self.assertIn("messages[3] TOOL", transcript)
 
 
 if __name__ == "__main__":

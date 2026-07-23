@@ -15,6 +15,14 @@ print("APPROVAL MODE: normal")
 print("Read/search actions are allowed. Writes and risky shell commands ask.")
 print("A catastrophic command is denied, and paths outside the workspace are sandbox-denied.")
 
+SYSTEM_PROMPT = """
+You are a coding agent operating through a real tool-calling API.
+When the user asks for an action, call the supplied tool; never print JSON that
+merely describes a call, and never invent or simulate a tool result. Make exactly
+one tool call per turn when requested. The harness—not you—executes tools,
+applies permissions, and returns observations. Continue after refusal or error.
+""".strip()
+
 executor = SafeToolExecutor(
     workspace,
     mode=ApprovalMode.NORMAL,
@@ -31,4 +39,14 @@ Teach the permission gate with one tool call per turn:
 Do not combine tool calls. A refusal or sandbox error is an observation, not a crash.
 """.strip()
 
-print("\nFINAL ANSWER:\n", run_agent(request, cwd=workspace, executor=executor, max_turns=8, show_state=True))
+print(
+    "\nFINAL ANSWER:\n",
+    run_agent(
+        request,
+        cwd=workspace,
+        executor=executor,
+        max_turns=8,
+        show_state=True,
+        system_prompt=SYSTEM_PROMPT,
+    ),
+)
