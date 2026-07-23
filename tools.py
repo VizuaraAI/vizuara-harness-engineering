@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from context_engine import DEFAULT_MEMORY_PATH, remember
+
 Parameters = dict[str, Any]
 Executor = Callable[[dict[str, Any], Path], str]
 MAX_READ_LINES = 2_000
@@ -201,6 +203,10 @@ def _ls(args: dict[str, Any], cwd: Path) -> str:
     return "\n".join(names) or "Directory is empty."
 
 
+def _remember(args: dict[str, Any], cwd: Path) -> str:
+    return remember(args["fact"], cwd / DEFAULT_MEMORY_PATH)
+
+
 TOOLBOX = {
     tool.name: tool
     for tool in [
@@ -248,7 +254,7 @@ TOOLBOX = {
         Tool(
             "bash",
             "Bash",
-            "Run a shell command in the workspace and return stdout plus stderr. Use purpose-built read, grep, find, and ls tools when they express the task directly. This module intentionally has no permission gate yet.",
+            "Run a shell command in the workspace and return stdout plus stderr. Use purpose-built read, grep, find, and ls tools when they express the task directly. The harness may require approval or deny the action.",
             _object(
                 {
                     "command": {"type": "string", "minLength": 1, "description": "Shell command to execute."},
@@ -300,6 +306,22 @@ TOOLBOX = {
                 }
             ),
             _ls,
+        ),
+        Tool(
+            "remember",
+            "Remember",
+            "Save one short, durable project fact that should be available in future sessions. Store facts and stable rules only—not transcripts, temporary task state, or raw tool output.",
+            _object(
+                {
+                    "fact": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "A concise fact worth loading at the start of a future task.",
+                    }
+                },
+                ["fact"],
+            ),
+            _remember,
         ),
     ]
 }

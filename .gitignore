@@ -4,3 +4,5 @@ __pycache__/
 .venv/
 .DS_Store
 tool_demo_workspace/
+safety_demo_workspace/
+context_demo_workspace/

@@ -10,6 +10,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from context_engine import ContextEngine, count_tokens
+from safety import SafeToolExecutor
 from tools import execute_tool, openrouter_tools
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -86,12 +88,31 @@ def run_agent(
     max_turns: int = 20,
     cwd: str | Path = ".",
     show_state: bool = False,
+    executor: SafeToolExecutor | None = None,
+    context_engine: ContextEngine | None = None,
+    system_prompt: str = "You are a coding agent. Use tools to finish the job.",
 ) -> str:
     """Call → append → act → observe → repeat, until the model answers."""
     model = client or OpenRouterClient()
-    messages: list[dict[str, Any]] = [{"role": "user", "content": user_request}]
+    if context_engine:
+        context_engine.use_workspace(cwd)
+    messages = (
+        context_engine.start_messages(system_prompt, user_request)
+        if context_engine
+        else [{"role": "user", "content": user_request}]
+    )
 
     for turn in range(1, max_turns + 1):
+        raw_tokens = count_tokens(messages)
+        if context_engine:
+            compacted = context_engine.maybe_compact(messages)
+            if compacted is not messages:
+                print(
+                    f"COMPACTION: {raw_tokens:,} → {count_tokens(compacted):,} estimated tokens; "
+                    f"recent {context_engine.keep_recent} messages kept verbatim"
+                )
+                messages = compacted
+        print(f"CONTEXT: sending ~{count_tokens(messages):,} tokens in {len(messages)} messages")
         reply = model.complete(messages, tools=TOOLS)
         messages.append(reply)
         tool_calls = reply.get("tool_calls") or []
@@ -109,7 +130,11 @@ def run_agent(
             arguments = json.loads(function["arguments"])
             print(f"MODEL CHOSE: {function['name']}({json.dumps(arguments, ensure_ascii=False)})")
             tool_name = "read" if function["name"] == "read_file" else function["name"]
-            output = execute_tool(tool_name, arguments, cwd=cwd)
+            output = (
+                executor.execute(tool_name, arguments)
+                if executor
+                else execute_tool(tool_name, arguments, cwd=cwd)
+            )
             result = {"role": "tool", "tool_call_id": call["id"], "content": output}
             messages.append(result)
             print(f"HARNESS APPENDED: tool result ({len(output)} chars)")

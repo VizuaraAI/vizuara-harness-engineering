@@ -165,6 +165,135 @@ rm -rf tool_demo_workspace
 python3 03_tools_and_state.py
 ```
 
-> **Safety warning:** `bash`, `write`, and `edit` currently run without a
-> permission gate or sandbox. That omission is deliberate for this teaching
-> module; permissions and sandboxing are the next layer.
+> **Module boundary:** `03_tools_and_state.py` deliberately runs the naked
+> toolbox so students can see why a safety layer is necessary. Module 3 adds the
+> permission gate and workspace boundary around the same tools.
+
+---
+
+## Module 3 — permissions and sandboxing
+
+`safety.py` places two independent defenses between a model request and tool
+execution:
+
+```text
+model requests action
+        ↓
+workspace sandbox: is it contained?
+        ↓
+permission gate: ALLOW / ASK / DENY
+        ↓
+execute only if both defenses permit it
+```
+
+The model never approves itself. `PermissionGate` classifies the request, and
+`SafeToolExecutor` either runs it, asks the human, or returns a refusal to the
+message loop as a tool result.
+
+Approval modes:
+
+- `strict`: ask before every non-catastrophic action;
+- `normal`: allow reads/searches, ask for writes and risky shell commands;
+- `auto`: allow actions without asking, while sandbox denials still apply.
+
+`SafeToolExecutor` disables arbitrary `bash` by default. The classroom demo opts
+into `allow_unsafe_shell=True` only so students can watch the interactive gate;
+that mode must remain supervised and is not containment.
+
+Catastrophic patterns such as `sudo rm -rf /` are always denied. The workspace
+sandbox rejects file paths outside its root, shell path escapes, and common
+network commands when networking is disabled.
+
+> This is an educational application-level policy boundary, not a hardened OS
+> sandbox. It rejects direct path escapes, common network commands, environment
+> paths, and opaque nested interpreters, but arbitrary shell syntax cannot be
+> contained reliably with string matching. For hostile or unsupervised code, use
+> a container/VM with filesystem, process, credential, and network isolation.
+
+### Test Module 3 without API credits
+
+```bash
+python3 -m unittest discover -s tests -p 'test_safety.py' -v
+```
+
+### Run the interactive safety demo
+
+```bash
+export OPENROUTER_API_KEY="your-key"
+export OPENROUTER_MODEL="openai/gpt-oss-20b:free"
+rm -rf safety_demo_workspace
+python3 04_permissions_and_sandbox.py
+```
+
+The model first uses an allowed read-only action. When it proposes deletion,
+the harness prints the exact tool, inputs, and reason before asking:
+
+```text
+Run this action? [y/N]
+```
+
+Run once and answer `y`; reset and run again answering `n`. On refusal, the file
+survives and the refusal is appended to the model's messages. A later attempt to
+write `../escaped.txt` is denied by the sandbox regardless of approval mode.
+
+---
+
+## Module 4 — compaction and persistent memory
+
+`context_engine.py` adds two kinds of memory:
+
+- **compaction:** summarize old messages while preserving the most recent ones
+  verbatim, keeping a long session under a configurable estimated-token budget;
+- **persistent memory:** save concise durable facts in `AGENT_MEMORY.md` and
+  load that notebook into the system message at the start of a new session.
+
+The token count is intentionally a dependency-free estimate for teaching. It
+shows growth and the compaction sawtooth; it is not provider billing telemetry.
+
+### Test Module 4 without API credits
+
+```bash
+python3 -m unittest discover -s tests -p 'test_context_engine.py' -v
+```
+
+The tests prove that compaction:
+
+- triggers only above budget;
+- preserves the system message;
+- preserves recent messages exactly;
+- replaces old transcript clutter with a short summary;
+- reduces estimated context size.
+
+They also prove that memory survives a new `ContextEngine` instance and duplicate
+facts are not written twice.
+
+### Run the live context-engine demo
+
+```bash
+export OPENROUTER_API_KEY="your-key"
+export OPENROUTER_MODEL="openai/gpt-oss-20b:free"
+rm -rf context_demo_workspace
+python3 05_context_engine.py
+```
+
+The demo has three phases:
+
+1. builds a deliberately bloated transcript and prints its estimated token size;
+2. asks the model for meeting minutes, then prints the smaller compacted size;
+3. writes a durable fact, starts a fresh conversation, and answers from memory.
+
+Inspect the notebook afterward:
+
+```bash
+cat context_demo_workspace/AGENT_MEMORY.md
+```
+
+### Run everything
+
+```bash
+python3 -m unittest discover -s tests -v
+python3 -m py_compile *.py tests/*.py
+```
+
+Automated tests do not require an API key. Only numbered live demos call
+OpenRouter.

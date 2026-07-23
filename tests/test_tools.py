@@ -19,7 +19,7 @@ class ToolContractTests(unittest.TestCase):
         definitions = openrouter_tools()
         self.assertEqual(
             [definition["function"]["name"] for definition in definitions],
-            ["read", "write", "edit", "bash", "grep", "find", "ls"],
+            ["read", "write", "edit", "bash", "grep", "find", "ls", "remember"],
         )
         self.assertNotIn("execute", definitions[0]["function"])
         self.assertIn("parameters", definitions[0]["function"])
